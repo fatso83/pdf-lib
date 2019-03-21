@@ -15,25 +15,21 @@ import {
   popGraphicsState,
   pushGraphicsState,
   rotateRadians,
-  scale,
   skewRadians,
   stroke,
   strokingRgbColor,
-  translate,
 } from 'helpers/pdf-operators/simple';
 
-// =============================================================================
-// Based on: http://spencermortensen.com/articles/bezier-circle/
-//   P_0 = (0,1),  P_1 = (c,1),   P_2 = (1,c),   P_3 = (1,0)
-//   P_0 = (1,0),  P_1 = (1,-c),  P_2 = (c,-1),  P_3 = (0,-1)
-//   P_0 = (0,-1), P_1 = (-c,-1), P_3 = (-1,-c), P_4 = (-1,0)
-//   P_0 = (-1,0), P_1 = (-1,c),  P_2 = (-c,1),  P_3 = (0,1)
-//     with c = 0.551915024494
+/**
+ * KAPPA is used to approximate a symmetrical arc using a cubic Bezier curve.
+ * @hidden
+ */
+const KAPPA = 4.0 * ((Math.sqrt(2) - 1.0) / 3.0);
 
-/** @hidden */
-const C_VAL = 0.551915024494;
-
-/** @hidden */
+/**
+ * Based on: http://stackoverflow.com/questions/2172798/how-to-draw-an-oval-in-html5-canvas/2173084#2173084
+ * @hidden
+ */
 const drawEllipsePath = ({
   x = 0,
   y = 0,
@@ -48,19 +44,29 @@ const drawEllipsePath = ({
   yScale?: number;
   rotationAngle?: number;
   skewAngles?: { xAxis: number; yAxis: number };
-}): PDFOperator[] => [
-  pushGraphicsState(),
-  translate(x, y),
-  rotateRadians(rotationAngle),
-  scale(xScale, yScale),
-  skewRadians(skewAngles.xAxis, skewAngles.yAxis),
-  moveTo(0, 1),
-  appendBezierCurve(C_VAL, 1, 1, C_VAL, 1, 0),
-  appendBezierCurve(1, -C_VAL, C_VAL, -1, 0, -1),
-  appendBezierCurve(-C_VAL, -1, -1, -C_VAL, -1, 0),
-  appendBezierCurve(-1, C_VAL, -C_VAL, 1, 0, 1),
-  popGraphicsState(),
-];
+}): PDFOperator[] => {
+  x -= xScale;
+  y -= yScale;
+
+  const ox = xScale * KAPPA;
+  const oy = yScale * KAPPA;
+  const xe = x + xScale * 2;
+  const ye = y + yScale * 2;
+  const xm = x + xScale;
+  const ym = y + yScale;
+
+  return [
+    pushGraphicsState(),
+    rotateRadians(rotationAngle),
+    skewRadians(skewAngles.xAxis, skewAngles.yAxis),
+    moveTo(x, ym),
+    appendBezierCurve(x, ym - oy, xm - ox, y, xm, y),
+    appendBezierCurve(xm + ox, y, xe, ym - oy, xe, ym),
+    appendBezierCurve(xe, ym + oy, xm + ox, ye, xm, ye),
+    appendBezierCurve(xm - ox, ye, x, ym + oy, x, ym),
+    popGraphicsState(),
+  ];
+};
 // =============================================================================
 
 // TODO: Implement borderStyle option.
